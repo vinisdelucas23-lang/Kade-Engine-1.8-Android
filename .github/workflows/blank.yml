@@ -1,3 +1,27 @@
+name: CI
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: 4.2.5
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 11
+
+      - name: Setup Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r21e
+
       - name: Instalar bibliotecas
         run: |
           haxelib setup ~/haxelib
@@ -10,9 +34,23 @@
           haxelib install hscript
           haxelib install newgrounds
           haxelib install hxcpp
-          # instala qualquer biblioteca do Project.xml que ainda esteja faltando
           grep -oP '<haxelib name="\K[^"]+' Project.xml | sort -u | while read lib; do
             haxelib path "$lib" > /dev/null 2>&1 || haxelib install "$lib" --always || true
           done
           haxelib run lime setup -alias -y
           haxelib list
+
+      - name: Configurar Android
+        run: |
+          haxelib run lime config ANDROID_SDK $ANDROID_HOME
+          haxelib run lime config ANDROID_NDK_ROOT ${{ steps.ndk.outputs.ndk-path }}
+          haxelib run lime config JAVA_HOME $JAVA_HOME
+          haxelib run lime config ANDROID_SETUP true
+
+      - name: Compilar
+        run: haxelib run lime build android -final
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KadeEngine-Android
+          path: export/release/android/bin/app/build/outputs/apk/
